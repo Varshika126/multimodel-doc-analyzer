@@ -45,25 +45,57 @@ npm run dev
 
 ---
 
-## 🌐 Deployment
+## 🌐 Deployment (Vercel + Render)
 
-### Frontend → Vercel
+Deploy **backend first**, then frontend (frontend needs the Render API URL).
 
-1. Push `frontend/` to GitHub
-2. Import repo in Vercel
-3. Set environment variable: `VITE_API_URL=https://your-backend.onrender.com/api`
-4. Deploy — `vercel.json` handles SPA routing
+### 1. MongoDB Atlas
 
-### Backend → Render
+1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+2. Database Access → create a user with password
+3. Network Access → **Allow access from anywhere** (`0.0.0.0/0`) so Render can connect
+4. Connect → copy the connection string and replace `<password>` with your user password
 
-1. Push `backend/` to GitHub
-2. Create new Web Service on Render
-3. Set environment variables:
-   - `MONGODB_URI` — MongoDB Atlas connection string
-   - `JWT_SECRET` — Random secret key
-   - `FRONTEND_URL` — Your Vercel frontend URL
-   - `NODE_ENV=production`
-4. Build: `npm install` | Start: `npm start`
+### 2. Backend → Render
+
+**Option A — Blueprint (recommended):** Dashboard → **New** → **Blueprint** → connect `multimodel-doc-analyzer` → Render reads root `render.yaml`.
+
+**Option B — Manual Web Service:**
+
+| Setting | Value |
+|---------|--------|
+| Root Directory | `backend` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+| Health Check Path | `/health` |
+
+**Environment variables:**
+
+| Variable | Example |
+|----------|---------|
+| `MONGODB_URI` | `mongodb+srv://user:pass@cluster.mongodb.net/docanalyzer` |
+| `JWT_SECRET` | long random string |
+| `JWT_EXPIRE` | `7d` |
+| `NODE_ENV` | `production` |
+| `FRONTEND_URL` | `https://your-app.vercel.app` (set after Vercel deploy, then redeploy) |
+| `MAX_FILE_SIZE` | `10485760` |
+
+After deploy, copy the service URL (e.g. `https://docanalyzer-backend.onrender.com`).
+
+### 3. Frontend → Vercel
+
+1. [vercel.com](https://vercel.com) → **Add New Project** → import the same GitHub repo
+2. **Root Directory** → `frontend` (required for monorepo)
+3. Framework Preset: **Vite** (build: `npm run build`, output: `dist`)
+4. Environment variable:
+
+   `VITE_API_URL` = `https://YOUR-RENDER-SERVICE.onrender.com/api`
+
+5. Deploy — `frontend/vercel.json` handles SPA routing
+
+6. Copy your Vercel URL → set `FRONTEND_URL` on Render to that URL (no trailing slash) → **Redeploy** backend
+
+CORS already allows `*.vercel.app` origins. Uploads on Render use ephemeral disk (files may not persist across restarts on free tier).
 
 ---
 

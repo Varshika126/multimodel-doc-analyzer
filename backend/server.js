@@ -18,6 +18,26 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
+const healthPayload = () => {
+  const dbReadyState = mongoose.connection.readyState;
+  const db =
+    dbReadyState === 1 ? 'connected' :
+    dbReadyState === 2 ? 'connecting' :
+    'disconnected';
+
+  return {
+    status: 'OK',
+    db,
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development'
+  };
+};
+
+// Health checks — registered first so Render probes succeed before DB is ready
+const sendHealth = (req, res) => res.status(200).json(healthPayload());
+app.get('/health', sendHealth);
+app.get('/api/health', sendHealth);
+
 // Security middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
@@ -67,31 +87,28 @@ app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/ai', aiRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString(), env: process.env.NODE_ENV });
-});
-
 // Error handler
 app.use(errorHandler);
 
-// MongoDB connection
+// MongoDB connection (non-blocking — server listens immediately for health checks)
 const connectDB = async () => {
+  if (!process.env.MONGODB_URI) {
+    console.error('❌ MONGODB_URI is not set');
+    return;
+  }
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ MongoDB connected successfully');
   } catch (err) {
     console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
   }
 };
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  });
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  connectDB();
 });
 
 module.exports = app;
